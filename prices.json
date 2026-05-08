@@ -1,0 +1,74 @@
+import json
+import cloudscraper
+from bs4 import BeautifulSoup
+import datetime
+import sys
+import time
+import random
+import re
+
+# สร้างหุ่นยนต์ Bypass Cloudflare
+scraper = cloudscraper.create_scraper(
+    browser={
+        'browser': 'chrome',
+        'platform': 'windows',
+        'desktop': True
+    }
+)
+
+def extract_number(text):
+    if not text: return None
+    match = re.search(r'\d+(\.\d+)?', text.replace(',', ''))
+    return float(match.group()) if match else None
+
+def detect_pack_size(text):
+    if not text: return 1
+    if re.search(r'(แพ็คคู่|แพ็กคู่|แพคคู่|ขวดคู่)', text): return 2
+    match1 = re.search(r'(?:แพ็ค|แพ็ก|แพค|pack|x)\s*([2-9]|[1-9]\d)', text, re.IGNORECASE)
+    if match1: return int(match1.group(1))
+    return 1
+
+# --- ฟังก์ชันดึงราคา (ปรับปรุงตามโค้ดที่คุณส่งมา) ---
+def get_store_price(url, store_name):
+    try:
+        response = scraper.get(url, timeout=20)
+        if response.status_code != 200: return None, 1
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        price = None
+        
+        # ค้นหาจาก __NEXT_DATA__ (BigC / Lotus)
+        script_tag = soup.find('script', id='__NEXT_DATA__')
+        if script_tag:
+            data = json.loads(script_tag.string)
+            # ตรรกะเจาะหาตัวเลขราคาตามโครงสร้าง JSON ของแต่ละเว็บ
+            # (ใส่ logic การค้นหา price จาก json props ที่นี่)
+            
+        # fallback: ค้นหาจาก ld+json
+        ld_json = soup.find('script', type='application/ld+json')
+        if ld_json:
+            data = json.loads(ld_json.string)
+            # ดึงราคาจาก offers
+            
+        return price, detect_pack_size(url)
+    except:
+        return None, 1
+
+# โหลดข้อมูลสินค้า
+with open('prices.json', 'r', encoding='utf-8') as f:
+    products = json.load(f)
+
+print(f"🚀 เริ่มต้นการสแกนราคาจริง: {datetime.datetime.now()}")
+
+# ตัวอย่างการทำงาน
+for p in products:
+    print(f"🔍 กำลังตรวจสอบ: {p['name']}")
+    # ในการใช้งานจริง คุณต้องเพิ่ม field 'urls' ใน json เพื่อให้บอทรู้ว่าจะไปที่ลิงก์ไหน
+    # p['bigc'] = get_store_price(p['urls']['bigc'], 'bigc')
+    time.sleep(random.uniform(2, 4))
+
+# บันทึกผล
+with open('prices.json', 'w', encoding='utf-8') as f:
+    json.dump(products, f, ensure_ascii=False, indent=4)
+
+print("✅ อัปเดตราคาล่าสุดลงไฟล์เรียบร้อย!")
