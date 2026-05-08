@@ -34,7 +34,7 @@ def extract_number(text):
     return float(match.group()) if match else None
 
 # ==========================================
-# 2. ฟังก์ชันดึงราคาของแต่ละห้าง
+# 2. ฟังก์ชันดึงราคาของแต่ละห้าง (เจาะระบบของจริง)
 # ==========================================
 def get_store_price(url, store_name):
     if not url or str(url).strip() == "":
@@ -46,21 +46,43 @@ def get_store_price(url, store_name):
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # --- ชั้นที่ 1: เจาะข้อมูลจากระบบหลังบ้าน (Next.js Data) ---
-        script_tag = soup.find('script', id='__NEXT_DATA__')
-        if script_tag:
-            data = json.loads(script_tag.string)
-            # เพิ่มตรรกะเจาะหาตัวเลขราคาตามโครงสร้าง JSON ของแต่ละเว็บได้ที่นี่
-            pass
-            
-        # --- ชั้นที่ 2: ค้นหาจาก ld+json (Schema.org) ---
-        ld_json = soup.find('script', type='application/ld+json')
-        if ld_json:
-            data = json.loads(ld_json.string)
-            pass
+        # --- วิธีที่ 1: ดึงจาก Schema.org (ld+json) มาตรฐาน E-commerce ---
+        ld_json_tags = soup.find_all('script', type='application/ld+json')
+        for tag in ld_json_tags:
+            if tag.string:
+                try:
+                    data = json.loads(tag.string)
+                    # กรณีเป็น List
+                    if isinstance(data, list):
+                        for item in data:
+                            if item.get('@type') == 'Product' and 'offers' in item:
+                                if 'price' in item['offers']: return float(item['offers']['price'])
+                    # กรณีเป็น Object เดี่ยว
+                    elif data.get('@type') == 'Product' and 'offers' in data:
+                        if 'price' in data['offers']: return float(data['offers']['price'])
+                except:
+                    pass
+                    
+        # --- วิธีที่ 2: ดึงจากข้อมูล JSON หลังบ้าน (Next.js) ของ BigC / Lotus ---
+        if store_name in ['BigC', 'Lotus']:
+            script_tag = soup.find('script', id='__NEXT_DATA__')
+            if script_tag:
+                # ใช้ Regex สแกนหาราคาตรงๆ จาก JSON Text
+                matches = re.findall(r'"price":(\d+(?:\.\d+)?)|"special_price":(\d+(?:\.\d+)?)|"sellPrice":(\d+(?:\.\d+)?)', script_tag.string)
+                if matches:
+                    for match in matches:
+                        valid_prices = [float(m) for m in match if m]
+                        if valid_prices: return min(valid_prices) # เลือราคาที่ถูกที่สุด (เผื่อมีราคาโปร)
 
-        # *ตัวอย่างจำลองการดึงราคาเพื่อทดสอบระบบ (แก้ไขเป็นดึงข้อมูลจริงได้เลย)*
-        return float(round(random.uniform(20.0, 150.0), 2))
+        # --- วิธีที่ 3: ดึงจาก HTML Class ของ Tops / AllOnline ---
+        for class_name in ['price', 'current-price', 'price-current', 'sale-price', 'special-price']:
+            tags = soup.find_all(class_=class_name)
+            for tag in tags:
+                val = extract_number(tag.text)
+                if val and val > 0:
+                    return val
+
+        return None
         
     except Exception as e:
         print(f"  ❌ {store_name} Error: ไม่สามารถดึงข้อมูลได้ ({e})")
@@ -75,11 +97,8 @@ stores = ['BigC', 'Lotus', 'Tops', 'AllOnline']
 for item in appData:
     print(f"\n📦 กำลังเช็คราคา: {item.get('name', 'ไม่ทราบชื่อสินค้า')}")
     
-    # ถ้า Object ยังไม่มี Key สำหรับเก็บราคาหรือ URL ให้สร้างเตรียมไว้
-    if 'prices' not in item:
-        item['prices'] = {}
-    if 'urls' not in item:
-        item['urls'] = {}
+    if 'prices' not in item: item['prices'] = {}
+    if 'urls' not in item: item['urls'] = {}
 
     for store in stores:
         url = item['urls'].get(store)
@@ -93,11 +112,13 @@ for item in appData:
                     updates_made = True
                 else:
                     print(f"  -> ➖ {store} ราคาคงเดิม: {new_price} บาท")
+            else:
+                print(f"  -> ⚠️ ไม่พบราคา {store} ในหน้าเว็บ")
         else:
             print(f"  -> ⏭️ ข้าม {store} (ไม่มี URL ในระบบ)")
             
-    # หน่วงเวลา 2-4 วินาที เพื่อไม่ให้เว็บปลายทางบล็อก IP
-    time.sleep(random.uniform(2, 4))
+    # หน่วงเวลา 2-5 วินาที เพื่อไม่ให้เว็บปลายทางบล็อก IP
+    time.sleep(random.uniform(2, 5))
 
 # ==========================================
 # 4. บันทึกข้อมูลกลับลงไฟล์ prices.json
