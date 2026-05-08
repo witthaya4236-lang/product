@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Price Tracker Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter & Sarabun (for Thai) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', 'Sarabun', sans-serif;
+            background-color: #f1f5f9;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 20px;
+        }
+        .card-shadow {
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .active-product {
+            background-color: #eff6ff;
+            border-color: #3b82f6;
+            color: #1d4ed8;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+            <div class="max-w-[1600px] mx-auto px-4 h-20 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-600 p-2 rounded-lg text-white">
+                        <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-slate-900 leading-none">Price Scraper Intelligence v2.1</h1>
+                        <p class="text-slate-500 text-xs mt-1">สำรวจราคาและขนาดแพ็คสินค้าแยกตามบริษัท (รวม AllOnline)</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <div class="hidden md:block text-right">
+                        <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">สถานะบอทสแกนล่าสุด</p>
+                        <p class="text-sm font-medium text-slate-600" id="lastUpdatedText">-</p>
+                    </div>
+                    <button id="runBotBtn" class="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all shadow-lg shadow-blue-200 active:scale-95">
+                        <i data-lucide="zap" class="w-4 h-4" id="botIcon"></i>
+                        <span id="botBtnText">รันบอทสแกนทุกเว็บ</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="progressContainer" class="w-full bg-slate-100 h-1.5 overflow-hidden hidden">
+                <div id="progressBar" class="bg-blue-500 h-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </header>
+
+        <main class="flex-1 max-w-[1600px] mx-auto w-full p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Sidebar -->
+            <aside class="lg:col-span-3 flex flex-col gap-4">
+                <div class="bg-white rounded-xl border border-slate-200 card-shadow flex flex-col h-[calc(100vh-160px)]">
+                    <div class="p-4 border-b border-slate-100">
+                        <div class="relative">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
+                            <input 
+                                type="text" 
+                                id="searchInput"
+                                placeholder="ค้นหาชื่อสินค้า..."
+                                class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+                            >
+                        </div>
+                    </div>
+                    
+                    <div id="productListContainer" class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar text-sm">
+                        <!-- รายชื่อสินค้า -->
+                    </div>
+                    
+                    <div class="p-3 bg-slate-50 text-[10px] text-slate-400 border-t border-slate-100 flex justify-between">
+                        <span>ฐานข้อมูลสินค้าทั้งหมด</span>
+                        <span id="productCount">0 รายการ</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Content Area -->
+            <section class="lg:col-span-9 space-y-6">
+                
+                <div id="dashboardContent" class="hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="bg-white rounded-xl border border-slate-200 card-shadow overflow-hidden mb-6">
+                        <div class="bg-slate-50 px-6 py-4 border-b border-slate-200">
+                            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div>
+                                    <h2 id="selectedProductName" class="text-xl font-bold text-slate-800">กรุณาเลือกสินค้า</h2>
+                                    <p class="text-sm text-slate-500 flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="info" class="w-3.5 h-3.5"></i> บอทประมวลผลขนาดแพ็คแยกตามหน้าเว็บของแต่ละเครือข่าย
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Cards Container: Adjusted to 4 columns for large screens -->
+                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" id="statsContainer">
+                            <!-- ราคาแต่ละเจ้า -->
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 card-shadow p-6">
+                        <div class="flex items-center justify-between mb-8">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-800">แนวโน้มราคาต่อหน่วย (Unit Price Trend)</h3>
+                                <p class="text-sm text-slate-500">เปรียบเทียบความคุ้มค่าแบบ 1:1 ย้อนหลัง 14 วัน ของทั้ง 4 เจ้า</p>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span><span class="text-[10px] font-bold">BigC</span></div>
+                                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span class="text-[10px] font-bold">Lotus</span></div>
+                                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span><span class="text-[10px] font-bold">Tops</span></div>
+                                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span><span class="text-[10px] font-bold">AllOnline</span></div>
+                            </div>
+                        </div>
+                        <div class="h-[450px] w-full relative">
+                            <canvas id="priceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyState" class="flex flex-col items-center justify-center h-[500px] text-slate-400">
+                    <div class="bg-slate-100 p-8 rounded-full mb-4">
+                        <i data-lucide="package-search" class="w-16 h-16"></i>
+                    </div>
+                    <p class="text-xl font-bold text-slate-600">เลือกสินค้าเพื่อเปรียบเทียบขนาดแพ็คและราคา</p>
+                    <p class="text-sm mt-2">บอทจะคำนวณให้ว่าร้านไหนขายแพ็คกี่ชิ้น และราคาเฉลี่ยต่อหน่วยเท่าไหร่</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const RAW_PRODUCTS = `คนอร์คัพโจ๊กรสกุ้ง32g Piece
+คนอร์คัพโจ๊กรสกุ้ง32g Pack
+คนอร์คัพโจ๊กรสหมู32g Piece
+คนอร์คัพโจ๊กรสหมู32g Pack
+คนอร์คัพโจ๊กรสหมูผสมสาหร่าย32g Piece
+คนอร์คัพโจ๊กรสหมูผสมสาหร่าย32g Pack
+คนอร์โจ๊กซอง รสหมู32g Piece
+คนอร์โจ๊กซอง รสหมู32g Pack
+คนอร์โจ๊กซอง รสไก่32g Piece
+คนอร์โจ๊กซอง รสไก่32g Pack
+มะลิโกลด์ครีมเทียมข้นหวาน380g Piece
+ทีพอทพร่องไขมันอาหารและเบเกอรี่385g Piece
+นกเหยี่ยวนมปรุงแต่งสำหรับอาหาร1000ml Piece
+คาร์เนชั่นครีมเทียมข้นหวาน2kg Piece
+คาร์เนชั่นปรุงอาหารและเบเกอรี่405g Piece
+พาเลซExtraสำหรับปรุงอาหารและเบเกอรี385g Piece
+คาร์เนชั่นครีมเทียมข้นหวาน505g Piece
+โดเน่ซีเรียลมิลค์ช็อกโกแลต24g Piece
+โดเน่ซีเรียลมิลค์ช็อกโกแลต24g Pack
+เนสท์เล่ไมโลซีเรียล15g Piece
+เนสท์เล่ไมโลซีเรียล15g Pack
+เนสท์เล่โกโก้ครั้นช์ซีเรียล15g Piece
+เนสท์เล่โกโก้ครั้นช์ซีเรียล15g Pack
+เนสท์เล่โกโก้ครั้นช์ซีเรียล50g Piece
+เนสท์เล่โกโก้ครั้นช์ซีเรียล50g Pack
+เนสวิต้าซีเรียลธัญญาหารรสดั้งเดิม25gx12 Pack
+เนสวิต้าซีเรียลธัญญาหารน้ำตาลน้อย25gx12 Pack
+กู๊ดไทม์ซีเรียลธัญญาหารรสวนิลลา420g Piece
+เนเจอร์กิฟปรุงสำเร็จผสมโสม13.5gx10 Piece
+มอคโคน่าโกลด์สำเร็จสมูธเบลนด์15.8gx7 Pack
+มอคโคน่าโกลด์สำเร็จสมูธเบลนด์15.8gx7 Set
+มอคโคน่าโกลด์สำเร็จสมูธเบลนด์15.8gx20 Pack
+โอวัลตินเครื่องดื่มมอลต์(สูตร3)450g Piece
+ชาตรามือปรุงสำเร็จชาเขียวถุง200g Piece
+ทรูสเลนปรุงสำเร็จคอฟฟี่พลัส16gx15 Pack
+โอวัลตินน้ำเต้าหู้ผงออริจินัล28gx13 Pack
+เนสกาแฟปรุงสำเร็จB&Bริชอโรมา16gx27 Pack
+เนสกาแฟปรุงสำเร็จB&Bเอสเพรสโซ15.1gx27 Pack
+เนสกาแฟปรุงสำเร็จB&Bเอสเพรสโซ15.1gx9 Piece
+เนสกาแฟปรุงสำเร็จB&Bเอสเพรสโซ15.1gx9 Pack
+เนสกาแฟปรุงสำเร็จB&Bริชอโรมา16gx9 Pack
+เนสกาแฟปรุงสำเร็จB&Bริชอโรมา16gx9 PAS
+โอวัลตินน้ำเต้าหู้ผงงาขาวงาดำ28gx13 Pack
+เบอร์ดี้ปรุงสำเร็จโรบัสต้า15gx27 Pack
+เบอร์ดี้ปรุงสำเร็จเอสเพรสโซ12.1gx27 Pack
+เบอร์ดี้ปรุงสำเร็จโรบัสต้า15gx8 Piece
+เบอร์ดี้ปรุงสำเร็จโรบัสต้า15gx8 Pack
+เนสทีชาปรุงสำเร็จชามะนาว13gx18 Pack
+ไมโลช็อกโกแลตมอลต์แอคทีฟโก120g Piece
+ไมโลช็อกโกแลตมอลต์แอคทีฟโก120g Pack
+มอคโคน่าทรีโอปรุงสำเร็จเอสเพรสโซ15.8gx60 Pack
+บิวติสรินปรุงสำเร็จผสมคอลลาเจน12gx12 Pack
+บิวติสรินปรุงสำเร็จผสมมะรุม12gx12 Pack
+มอคโคน่าทรีโอปรุงสำเร็จริช&สมูท15.8gx27 Pack
+เพรียวปรุงสำเร็จออริจินัล12gx12 Piece
+เพรียวปรุงสำเร็จออริจินัล12gx12 Pack
+ซุปเปอร์กาแฟปรุงสำเร็จออริจินัล17gx25 Pack
+บิวติสรินปรุงสำเร็จพลัสดีทอซี่12gx10 Pack
+บ้านสมุนไพรขิงผง16gx14/16gx12 Piece
+ดีมอลต์ช็อกโกแลตมอลต์ปรุงสำเร็จ30gx20 Piece
+โอวัลตินเครื่องดื่มมอลต์หวานน้อย31gx17 Pack
+ซูเปอร์ซีเชฟแมคฯซอสมะเขือเทศฝาดึง155g CAN
+ซูเปอร์ซีเชฟแมคฯซอสมะเขือเทศฝาดึง155g Pack
+โรซ่าปลาแมคเคอเรลในซอสมะเขือเทศ190g CAN
+โรซ่าปลาแมคเคอเรลในซอสมะเขือเทศ190g Pack
+มงกุฏทะเลปลาแมคเคอเรลในซอสมะเขือเทศ145g CAN
+มงกุฏทะเลปลาแมคเคอเรลในซอสมะเขือเทศ145g Pack
+มงกุฎทะเลปลาซาดีนในซอสมะเขือเทศ145g CAN
+มงกุฎทะเลปลาซาดีนในซอสมะเขือเทศ145g Pack
+ซีเล็คน้ำพริกผัดทูน่า 95g CAN
+ซีเล็คน้ำพริกผัดทูน่า 95g Pack
+ยำยำจัมโบ้ ต้มยำกุ้ง 63g x10 Pack
+มาม่า เย็นตาโฟต้มยำหม้อไฟ 60g x10 Pack
+ไวไวเส้นหมี่อบแห้ง180g Piece
+ไวไวเส้นหมี่อบแห้ง180g Pack
+ไวไว หมูสับ 60gx10 Pack
+นิสชินมินิคัพบะหมี่รสสาหร่าย40g Piece
+นิสชินมินิคัพบะหมี่รสสาหร่าย40g Pack
+มาม่าบิ๊กแพ็คบะหมี่ต้มยำกุ้งน้ำข้น95gx4 Pack
+ยำยำคัพเต็มเต็มหมูสับ60g Piece
+ยำยำคัพเต็มเต็มหมูสับ60g Pack
+ยำยำคัพ รสต้มยำกุ้ง 60g Piece
+ยำยำคัพ รสต้มยำกุ้ง 60g Pack
+ยำยำช้างน้อยบะหมี่รสข้าวโพด20g Piece
+ยำยำช้างน้อยบะหมี่รสข้าวโพด20g Pack
+ต้นสน วุ้นเส้น 80g Piece
+ต้นสน วุ้นเส้น 80g Pack
+คนอร์ซุปก้อนรสหมู80g Piece
+คนอร์ซุปก้อนรสหมู80g Pack
+คนอร์ซุปก้อนรสไก่120g Piece
+คนอร์ซุปก้อนรสไก่120g Pack
+คนอร์ซุปก้อนรสหมู120g Piece
+คนอร์ซุปก้อนรสหมู120g Pack
+ง่วนเชียงซีอิ้วหวาน700cc Piece
+ฟ้าไทยผงปรุงรสหมู165g Piece
+ฟ้าไทยผงปรุงรสหมู165g Pack
+ไร่ทิพย์พริกขี้หนูป่น500g Piece
+แม่ประนอมน้ำพริกเผาไทย228g Piece
+ทิพรสน้ำปลา300cc Piece
+รสดีเมนูเครื่องต้มยำสำเร็จรูปชนิดผง60g Piece
+รสดีเมนูเครื่องต้มยำสำเร็จรูปชนิดผง60g Pack
+รสดีเมนูเครื่องพะโล้สำเร็จรูปชนิดผง60g Piece
+รสดีเมนูเครื่องพะโล้สำเร็จรูปชนิดผง60g Pack
+ต้ากี่น้ำจิ้มสุกี้650g Piece
+อสรน้ำส้มสายชู700cc Piece
+อายิโนะโมะโต๊ะผงชูรส72g Piece
+อายิโนะโมะโต๊ะผงชูรส72g Pack
+ฟ้าไทยน้ำมะนาว45%1000cc Piece
+ฟ้าไทยน้ำมะนาว45%1000cc Pack
+ฟ้าไทยผงทำซุปใส165g Piece
+ฟ้าไทยผงทำซุปใส165g Pack
+ฉั่วฮะเส็งน้ำพริกเผา(กป.)800g Piece
+ไร่ทิพย์พริกไทยป่นขาว60g Piece
+ไร่ทิพย์พริกไทยป่นขาว60g Pack
+ตราชั่งกะปิ90g Piece
+คอปปซีเรียลรสช็อกโกแลต70g Piece
+คอปปซีเรียลรสช็อกโกแลต70g Pack
+คอปปซีเรียลรสช็อกโกแลต34g Piece
+คอปปซีเรียลรสช็อกโกแลต34g Pack
+โอวัลตินธัญญาหารปรุงสำเร็จไฟว์เกรน28gx13 Pack
+เนสทีชาปรุงสำเร็จชานมเย็น33gx13 Piece
+มาม่าบิ๊กแพ็คบะหมี่รสต้มยำกุ้ง95gx4 Pack
+มอคโคน่าสำเร็จรูปซีเล็คซอง165g Piece
+มอคโคน่าสำเร็จรูปซีเล็คซอง165g Pack
+แม่ครัวฉลากทองซอสหอย150cc Piece
+แม่ครัวฉลากทองซอสหอย300cc Piece
+แม่ครัวฉลากทองซอสหอย600cc Piece
+ภูเขาทองซอสปรุงรสฝาเขียว600cc Piece
+ภูเขาทองซอสปรุงรสฝาเขียว200cc Piece
+ภูเขาทองซอสปรุงรสฝาเขียว200cc Pack
+ภูเขาทองซอสพริกเผ็ดน้อย230g Piece
+ภูเขาทองซอสพริกเผ็ดน้อย230g Pack
+ภูเขาทองซอสพริกสูตรเผ็ดน้อย680ml Piece
+คาร์เนชั่นครีมเทียมข้นหวาน388g Piece
+แม็กกี้ซอสปรุงรส680cc Piece
+แม็กกี้ซอสเยาะจิ้ม100cc Piece
+แม็กกี้ซอสเยาะจิ้ม200cc Piece
+เนสกาแฟสำเร็จรูปเรดคัพซอง165g Piece
+เนสกาแฟสำเร็จรูปเรดคัพซอง40g Piece
+เนสกาแฟสำเร็จรูปเรดคัพซอง40g Pack
+เนสกาแฟสำเร็จรูปเรดคัพซอง80g Piece
+คอฟฟีเมตครีมเทียมโกลด์420g Piece
+คอฟฟีเมตครีมเทียมโกลด์420g Pack
+คอฟฟีเมตครีมเทียมโกลด์900g Piece
+ปุ้มปุ้ยหอยลายทอดรสเผ็ด40g CAN
+ปุ้มปุ้ยหอยลายทอดรสเผ็ด40g Pack
+มาม่า ต้มยำกุ้ง 55g Piece
+มาม่า ต้มยำกุ้ง 55g Pack
+มาม่า หมูสับ 60g Piece
+มาม่า หมูสับ 60g Pack
+มาม่า ต้มยำกุ้ง 55g x10 Pack
+มาม่า หมูสับ 60g x10 Pack
+มาม่า ต้มยำกุ้งน้ำข้น 55g Piece
+มาม่า ต้มยำกุ้งน้ำข้น 55g Pack
+มาม่าโจ๊กคัพรสหมู45g Piece
+มาม่าโจ๊กคัพรสหมู45g Pack
+นิสชิน มินิคัพไก่ผสมข้าวโพด 40g Piece
+นิสชิน มินิคัพไก่ผสมข้าวโพด 40g Pack
+มาม่าคัพ ต้มยำกุ้งน้ำข้น 60g Piece
+มาม่าคัพ ต้มยำกุ้งน้ำข้น 60g Pack
+ปรุงทิพย์เกลือ500g Piece
+ปรุงทิพย์เกลือ500g Pack
+ปรุงทิพย์เกลือ1000g Pack
+ทิพย์เกลือ220g Piece
+ทิพย์เกลือ220g Pack
+ทิพย์เกลือ220g Bag
+นกพิราบคู่ผักกาดดองเค็ม140g CAN
+นกพิราบคู่ผักกาดดองเค็ม140g Pack
+เด็กสมบูรณ์ซีอิ้วดำสูตร5 940cc Piece
+เด็กสมบูรณ์ซีอิ้วขาวเห็ดหอม700cc Piece
+เด็กสมบูรณ์ซีอิ้วขาวสูตร1 300cc Piece
+เด็กสมบูรณ์ซีอิ้วขาวสูตร1 700cc Piece
+เด็กสมบูรณ์ซีอิ้วขาวสูตร5 700cc Piece
+เด็กสมบูรณ์ซีอิ้วขาวเห็ดหอม300cc Piece
+เด็กสมบูรณ์ซีอิ้วขาวสูตร1 1000cc Piece
+เด็กสมบูรณ์เต้าเจี้ยวสูตร1 800cc Piece
+เด็กสมบูรณ์เต้าเจี้ยวสูตร1 350cc Piece
+ยำยำจัมโบ้ หมูสับ 60g Piece
+ยำยำจัมโบ้ หมูสับ 60g Pack
+ยำยำจัมโบ้ หมูสับ 60g x10 Pack
+UFCเงาะในน้ำเชื่อม20oz CAN
+UFCเงาะในน้ำเชื่อม20oz Pack
+มะลินมข้นแปลงไขมันหวาน355g Piece
+โรซ่าปลาแมคเคอเรลในซอสมะเขือเทศฝาดึง155g CAN
+โรซ่าปลาแมคเคอเรลในซอสมะเขือเทศฝาดึง155g Pack
+โรซ่าผักกาดดองเค็มซอง145g Piece
+โรซ่าผักกาดดองเค็มซอง145g Pack
+โรซ่าผักกาดดองเผ็ดหวานซอง145g Piece
+โรซ่าผักกาดดองเผ็ดหวานซอง145g Pack
+โรซ่าซอสพริก200ml Piece
+ไฮคิวซอสพริกศรีราชา670cc Piece
+โรซ่าซอสมะเขือเทศ300cc Piece
+สามม้าใบชาเบอร์สาม80g Piece
+สามม้าใบชาเบอร์สาม80g Pack
+ไวไวบะหมี่ปรุงสำเร็จ57g Piece
+ไวไวบะหมี่ปรุงสำเร็จ57g Pack
+ไวไว บะหมี่ปรุงสำเร็จ 57g x10 Pack
+ไวไวควิก ต้มโคล้ง 60g Piece
+ไวไวควิก ต้มโคล้ง 60g Pack
+ไวไว หมูสับต้มยำ 60g Piece
+ไวไว หมูสับต้มยำ 60g Pack
+ไวไว หอยลายผัดฉ่า 60g Piece
+ไวไว หอยลายผัดฉ่า 60g Pack
+ไวไว หมูสับต้มยำ 60gx10 Pack
+ทิพรสน้ำปลาขวดเพท700cc Piece
+โอวัลตินเครื่องดื่มมอลต์ช็อกโกแลต140g Piece
+โอวัลตินเครื่องดื่มมอลต์ช็อกโกแลต140g Pack
+โอวัลตินเครื่องดื่มมอลต์สกัด(สูตร3)1000g Piece
+โอวัลตินเครื่องดื่มมอลต์ช็อกโกแลต700g Piece
+แม่ประนอมน้ำจิ้มไก่260cc Piece
+แม่ประนอมน้ำจิ้มไก่980cc Piece
+แม่ประนอมน้ำจิ้มไก่390cc Piece
+ชาตรามือชาไทยต้นตำหรับถุง190g Piece
+มาลีลิ้นจี่ในน้ำเชื่อม20oz Piece
+มาลีลำไยในน้ำเชื่อม20oz Piece
+มาลีเงาะในน้ำเชื่อม20oz Piece
+ตราดาวคนเกลือปรุงอาหาร200g P12 Piece
+ตราดาวคนเกลือปรุงอาหาร200g P12 SACK
+นกพิราบผักกาดเค็มฮั่วน่ำฉ่าย140g CAN
+นกพิราบผักกาดเค็มฮั่วน่ำฉ่าย140g Pack
+นกพิราบผักกาดดองซีเซ็กฉ่าย140g CAN
+นกพิราบผักกาดดองซีเซ็กฉ่าย140g Pack
+อร่อยดีกะทิยูเอชที250ml Piece
+อร่อยดีกะทิยูเอชที250ml Pack
+พันท้ายฯน้ำจิ้มสุกี้กวางตุ้ง330cc Piece
+พันท้ายฯน้ำจิ้มสุกี้กวางตุ้ง330cc Pack
+พันท้ายฯน้ำจิ้มสุกี้กวางตุ้ง830cc Piece
+พันท้ายฯน้ำจิ้มสุกี้กวางตุ้ง830cc Pack
+ปุ้มปุ้ยหอยลายทอดรสเผ็ด70g CAN
+ปุ้มปุ้ยหอยลายทอดรสเผ็ด70g Pack
+ซูเปอร์ซีเชฟซาร์ดีนซอสมะเขือเทศฝาดึง155g CAN
+ซูเปอร์ซีเชฟซาร์ดีนซอสมะเขือเทศฝาดึง155g Pack
+นกพิราบผักกาดเค็มฮั่วน่ำฉ่าย230g CAN
+นกพิราบผักกาดเค็มฮั่วน่ำฉ่าย230g Pack
+พาเลซครีมเทียมข้นหวานพร่องไขมัน380g Piece
+คาร์เนชั่นExtraพร่องไขมันสำหรับอาหาร385g Piece
+เมกาเชฟน้ำปลา500cc Piece
+ทาคูมิอายิซอสโชยุญี่ปุ่น200cc Piece
+ภูเขาทองซอสปรุงรสฝาเขียวเพท1L Piece
+ม้าบินซอสพริก640cc Piece
+ม้าบินซอสพริกถุง1000cc Piece
+มอคโคน่าสำเร็จรูปเอสเพรสโซซอง120g Piece
+มอคโคน่าสำเร็จรูปเอสเพรสโซซอง120g Pack
+เขาช่องสำเร็จรูปชนิดเกล็ดซอง100g Piece
+มอคโคน่าสำเร็จรูปรอยัลโกลด์ฟรีซดราย120g Piece
+มอคโคน่าสำเร็จรูปรอยัลโกลด์ฟรีซดราย120g Pack
+มอคโคน่าสำเร็จรูปซีเล็คซอง70g Piece
+มอคโคน่าสำเร็จรูปซีเล็คซอง70g Pack
+ชาตรามือชาไทยต้นตำหรับถุง400g Piece
+คอฟฟีเมตครีมเทียมโกลด์200g Piece
+มาม่า เส้นหมี่น้ำใส 55g x10 Pack
+มาม่าคัพ หมูสับ 60g Piece
+มาม่าคัพ หมูสับ 60g Pack
+มาม่าคัพ ต้มยำกุ้ง 60g Piece
+มาม่าคัพ ต้มยำกุ้ง 60g Pack
+โรซ่าผักกาดดองยำซอง145g Piece
+โรซ่าผักกาดดองยำซอง145g Pack
+โรซ่าซอสพริก1kg Piece
+โรซ่าซอสมะเขือเทศ1kg Piece
+มอคโคน่าทรีโอปรุงสำเร็จเอสเพรสโซ15.8gx9 Pack
+มอคโคน่าทรีโอปรุงสำเร็จเอสเพรสโซ15.8gx9 Set
+มอคโคน่าทรีโอปรุงสำเร็จเอสเพรสโซ15.8gx27 Pack
+ไวไวควิก ต้มโคล้ง 60gx10 Pack
+แม่ประนอมน้ำพริกเผาไทย114g Piece
+เนสกาแฟสำเร็จรูปโกลด์ฟรีซดรายซอง100g Piece
+ปลาหมึกน้ำปลาแท้ขวดเพ็ทฉลากเหลือง700ml Piece
+อร่อยดีกะทิ1000ml Piece
+ฟิตเน่สมุนไพร2gx20 Piece
+ฟิตเน่สมุนไพร2gx20 Pack
+บัดดี้ดีนสำเร็จรูปซอง165g Piece
+บัดดี้ดีนคลาสสิค16gx30 Piece
+คาราบาวกาแฟ3in1เอสเปรสโซ16gx27 Pack
+คาร์เนชั่นนมจืดปรุงอาหารและเบเกอรี่140ml Piece
+คนอร์โจ๊กซอง รสหมู จัมโบ้50g Piece
+คนอร์โจ๊กซอง รสหมู จัมโบ้50g Pack
+นกพิราบผักกาดดองเผ็ดหวานซอง145g Piece
+นกพิราบผักกาดดองเผ็ดหวานซอง145g Pack
+ฟ้าไทยน้ำก๋วยเตี๋ยวเข้มข้นน้ำใส350g Piece
+ฟ้าไทยน้ำก๋วยเตี๋ยวเข้มข้นน้ำใส350g Pack
+ฟ้าไทยน้ำก๋วยเตี๋ยวเข้มข้นน้ำข้น350g Piece
+ฟ้าไทยน้ำก๋วยเตี๋ยวเข้มข้นน้ำข้น350g Pack
+เนสกาแฟปรุงสำเร็จB&Bน้ำตาลน้อย15gx27 Piece
+มาม่า ต้มยำกุ้งน้ำข้น 55g x10 Piece
+แม็กกี้ซอสปรุงอาหารสูตรเข้มเข้าเนื้อ680 Bottle
+ยูเชฟซาร์ดีนในซอสมะเขือเทศ145g CAN
+ยูเชฟซาร์ดีนในซอสมะเขือเทศ145g Pack
+ดรีมมี่ครีมเทียม800g Piece
+พร้าวหอมกะทิ1000ml Piece
+กิเลนคู่ วุ้นเส้น 80g Piece
+กิเลนคู่ วุ้นเส้น 80g Pack
+ง่วนเชียงซีอิ๊วหวาน300ml Piece
+แซ่บไมค์น้ำปลาร้าปรุงสุก330ml Piece
+คนอร์โจ๊กซอง รสกุ้ง-ปูอัด จัมโบ้50g Piece
+คนอร์โจ๊กซอง รสกุ้ง-ปูอัด จัมโบ้50g Pack
+ตะไคร้น้ำปลาหวาน(สูตรดั้งเดิม)สีแดง200g Piece
+ตะไคร้น้ำปลาหวาน(สูตรดั้งเดิม)สีแดง200g Pack
+พาเลซครีมเทียมข้นหวานพร่องไขมันหลอด195g Piece
+พาเลซครีมเทียมข้นหวานพร่องไขมันหลอด195g Pack
+อัมพวา กะทิแท้100%250ml Piece
+อัมพวา กะทิแท้100%250ml Pack
+น้องพรน้ำจิ้มเนื้อวัว100g Piece
+น้องพรน้ำจิ้มเนื้อวัว100g Pack
+น้องพรน้ำจิ้มซีฟู้ด300g Piece
+น้องพรน้ำจิ้มซีฟู้ด300g Pack
+ไร่ทิพย์พริกขี้หนูสวนป่นละเอียด100g Piece
+ไร่ทิพย์พริกขี้หนูสวนป่นละเอียด100g Pack
+มังกรคู่หมี่เตี๊ยว เส้นเหลือง 350g Piece
+มังกรคู่หมี่เตี๊ยว เส้นเหลือง 350g Pack
+เนสกาแฟปรุงสำเร็จB&Bริชอโรมา16gx40 Piece
+เนสกาแฟปรุงสำเร็จB&Bเอสเพรสโซ15.1gx40 Piece
+มาม่าข้าวต้มคัพรสหมูสับกระเทียม40g Piece
+มาม่าข้าวต้มคัพรสหมูสับกระเทียม35g Pack
+มาม่าข้าวต้มคัพรสหมูสับกระเทียม40g Pack
+นูเทลล่าเฮเซลนัทบดผสมโกโก้200g Piece
+ครัวนภัสน้ำจิ้มสุกี้ย่างเกาหลีรสเผ็ด280g Piece
+ครัวนภัสน้ำจิ้มสุกี้ย่างเกาหลีรสเผ็ด280g Pack
+ทีพอทนมข้นหวานสูตรนมสดหลอดบีบ180g Piece
+ทีพอทนมข้นหวานสูตรนมสดหลอดบีบ180g Pack
+อร่อยดีกะทิ500ml Piece
+ซัมยังบูลดักสไปซี่ราเมงออริจินอล140g Piece
+ซัมยังบูลดักสไปซี่ราเมงออริจินอล140g Pack
+ซัมยังบูลดักสไปซี่ราเมง2เอ็กซ์สไปซี่140g Piece
+ซัมยังบูลดักสไปซี่ราเมง2เอ็กซ์สไปซี่140g Pack
+โรซ่าปลาซาร์ดีนในซอสมะเขือเทศ155g Piece
+โรซ่าปลาซาร์ดีนในซอสมะเขือเทศ155g Pack
+ซานรีโม่สปาเก็ตตี้เบอร์5 250g Piece
+ซานรีโม่เอลโบว์มะกะโรนี35 250g Piece
+เนสกาแฟสำเร็จรูปโกลด์เครมมาซอง100g Piece
+เนสท์เล่ไมโลซีเรียล50g Piece
+เนสท์เล่ไมโลซีเรียล50g Pack
+ดรีมมี่ครีมเทียม400g Piece
+เนสกาแฟปรุงสำเร็จอเมริกาโน9.6gx25 Pack
+วาซาบิโอวาซาบิสดบด43g Piece
+ยูเชฟปลาแมคคาเรลในซอลมะเขือเทศ145g Piece
+ยูเชฟปลาแมคคาเรลในซอลมะเขือเทศ145g Pack
+เอส์ทีกาแฟชุมพรปรุงสำเร็จสมุนไพร15gx22 Pack
+เฟสต้าสำเร็จรูปโกลด์ฟรีซดรายขวด100g Piece
+โกโก้ดัทช์เครื่องดื่มโกโก้ชนิดผง160g Piece
+คอปปซีเรียลน้ำผึธ์70g Piece
+คอปปซีเรียลน้ำผึธ์70g Pack
+คอปปบอลส์ซีเรียลช็อกโกแลต70g Piece
+คอปปบอลส์ซีเรียลช็อกโกแลต70g Pack
+นกพิราบคู่ลำไยในน้ำเชื่อม540g Piece
+นกพิราบคู่ลิ้นจี่ในน้ำเชื่อม540g Piece
+เขาช่องสำเร็จรูปชนิดเกล็ดซอง45g Piece
+เขาช่องสำเร็จรูปชนิดเกล็ดซอง45g Pack
+ฮอทต้าขิงผง100%70g Piece
+ฮอทต้าขิงผง100%70g Pack
+ซีเล็คฟิตต์ทูน่าแซนวิชในน้ำแร่165g Piece
+ซีเล็คฟิตต์ทูน่าแซนวิชในน้ำแร่165g Pack
+นิสชิน ไก่เผ็ดเกาีหลี 60g x5 Pack
+ง่วนเชียงซีอิ๊วดำฉลากส้ม940g Piece
+หอยนางรมน้ำปลาแท้ฉลากทอง700ml Piece
+รสดีผงปรุงรสหมู155g Piece
+รสดีผงปรุงรสหมู155g Pack
+รสดีผงปรุงรสหมู400g Piece
+รสดีผงปรุงรสหมู400g Pack
+รสดีผงปรุงรสหมู800g Piece
+รสดีผงปรุงรสหมู800g Pack
+โรซ่าซอสมะเขือเทศ250g Piece
+โรซ่าซอสมะเขือเทศ250g Pack
+ไร่ทิพย์พริกไทยขาวเม็ด12g Piece
+ไร่ทิพย์พริกไทยขาวเม็ด12g Pack
+ไร่ทิพย์พริกไทยดำเม็ด12g Piece
+ไร่ทิพย์พริกไทยดำเม็ด12g Pack
+เด็กสมบูรณ์ซอสหอยนางรมสูตรเข้มข้น800g Piece
+เนสกาแฟปรุงสำเร็จB&BNoSugar12.2gx27 Pack
+มังกรบินชาแดงกลิ่นวานิลลา450g Piece
+มังกรบินชาเขียวกลิ่นมะลิ200g Piece
+รสดีเมนูลาบน้ำตกปรุงสำเร็จชนิดผง30g Piece
+รสดีเมนูลาบน้ำตกปรุงสำเร็จชนิดผง30g Pack
+ดรีมมี่โกโก้ผง500g Piece
+มะลิโกลด์ครีมเทียมข้นหวานพร่องไขมัน2kg Piece
+ต้นสน วุ้นเส้น 40g Piece
+ต้นสน วุ้นเส้น 40g Pack
+บัดดี้ดีนซีเล็คท์15gx25 Piece
+สุธารสพริกบดหยาบ500g Piece
+มอคโคน่าสำเร็จรูปรอยัลโกลด์ฟรีซดราย50g Piece
+มอคโคน่าสำเร็จรูปรอยัลโกลด์ฟรีซดราย50g Pack
+มอคโคน่าทรีโอปรุงสำเร็จเอสเพรสโซ15.8gx40 Piece
+มอคโคน่าโกลด์สำเร็จสมูธเบลนด์15.8gx30 Piece
+ฟ้าไทยน้ำก๋วยเตี๋ยวบะหมี่เกี๊ยว350g Piece
+ฟ้าไทยน้ำก๋วยเตี๋ยวบะหมี่เกี๊ยว350g Pack
+มาม่าคัพข้าวต้ม รสกุ้งกระเทียม 40g Piece
+มาม่าคัพข้าวต้ม รสกุ้งกระเทียม 40g Pack
+มาม่าคัพข้าวต้ม รสเล้งแซ่บ 40g Piece
+มาม่าคัพข้าวต้ม รสเล้งแซ่บ 40g Pack
+เซสท์โกลด์เนยเทียมกลิ่นเนยสด150g Piece
+เซสท์โกลด์เนยเทียมกลิ่นเนยสด150g Pack
+มาม่าออเรียนทัล ฮอตแอนด์สไปซี่ 85g Piece
+มาม่าออเรียนทัล ฮอตแอนด์สไปซี่ 85g Pack
+มาม่าออเรียนทัล รสผัดไข่เค็ม 85g Piece
+มาม่าออเรียนทัล รสผัดไข่เค็ม 85g Pack
+มาม่าออเรียนทัล รสฮอตโคเรียน 85g Piece
+มาม่าออเรียนทัล รสฮอตโคเรียน 85g Pack
+มาม่าออเรียนทัล รสกุ้งผัดซอสต้มยำ 85g Piece
+มาม่าออเรียนทัล รสกุ้งผัดซอสต้มยำ 85g Pack
+คนอร์บิ๊กคัพโจ๊กรสหมู45g Piece
+คนอร์บิ๊กคัพโจ๊กรสหมู45g Pack
+ซีเล็คฟิตต์ทูน่าแซนวิชในน้ำเกลือ165g Piece
+ซีเล็คฟิตต์ทูน่าแซนวิชในน้ำเกลือ165g Pack
+คนอร์โจ๊กซองรสหมูสาหร่าย32g P4 Piece
+คนอร์โจ๊กซองรสหมูสาหร่าย32g P4 Pack
+คนอร์โจ๊กซองรสกุ้งปูอัด32g P4 Piece
+คนอร์โจ๊กซองรสกุ้งปูอัด32g P4 Pack
+อาราบัสปรุงสำเร็จออริจินัล16gx30 Piece
+อาราบัสปรุงสำเร็จเอสเพรสโซ16gx30 Piece
+คาเฟ่อาร์ตสำเร็จรูปแบล็คโกลด์ขวด100g Piece
+ซัมยังบูลดักสไปซี่ราเมงคาโบนาร่า130g Piece
+ซัมยังบูลดักสไปซี่ราเมงคาโบนาร่า130g Pack
+มาม่าคัพ ออเรียนทัลรสผัดไข่เค็ม 80g Piece
+มาม่าคัพ ออเรียนทัลรสผัดไข่เค็ม 80g Pack
+OTOPป้าแว่น น้ำพริกกุ้งกรอบ 40g Piece
+OTOPป้าแว่น น้ำพริกนรกแมงดา 40g Piece
+OTOPป้าแว่น น้ำพริกปลาสลิดโบราณ 40g Piece
+หอยเป๋าฮื้อน้ำปลาแท้ 300ml Piece
+นอติลุสไลท์ทูน่าชนิดก้อนในน้ำมัน 165g Piece
+นอติลุสไลท์ทูน่าชนิดก้อนในน้ำมัน 165g Pack
+นอติลุสไลท์ทูน่าสเต็กในน้ำแร่ 165g Piece
+นอติลุสไลท์ทูน่าสเต็กในน้ำแร่ 165g Pack
+มาม่าคัพเย็นตาโฟหม้อไฟ 60g Piece
+มาม่าคัพเย็นตาโฟหม้อไฟ 60g Pack
+คิวพีน้ำสลัดงาคั่วญี่ปุ่น 210ml Piece
+น้ำใจน้ำพริกแกงเผ็ด100g Piece
+น้ำใจน้ำพริกแกงเผ็ด100g Pack
+เด็กสมบูรณ์น้ำปลาแท้700ml Piece
+ตราเพียวฟู้ดส์ ชีสดิป 200g Piece
+เพียวฟู้ดส์ ซุปชาบูเข้มข้น 100g Piece
+เกรนเน่ย์ธัญพืชอัดแท่งสตรอว์เบอร์รี่20g Piece
+เกรนเน่ย์ธัญพืชอัดแท่งสตรอว์เบอร์รี่20g Pack
+เกรนเน่ย์ธัญพืชอัดแท่งฮันนี่อัลมอนด์20g Piece
+เกรนเน่ย์ธัญพืชอัดแท่งฮันนี่อัลมอนด์20g Pack
+เกรนเน่ย์ธัญพืชอัดแท่งช็อกโกบานาน่า20g Piece
+เกรนเน่ย์ธัญพืชอัดแท่งช็อกโกบานาน่า20g Pack
+อังเคิลบาร์นส์ผงปรุงรสปาปริก้า200g Piece
+อังเคิลบาร์นส์ผงปรุงรสชีส200g Piece
+รสดีผงปรุงรสไก่155g Piece
+รสดีผงปรุงรสไก่155g Pack
+มังกรคู่คัพ วุ้นเส้นก๋วยเตี๋ยวน้ำตก55g Piece
+มังกรคู่คัพ วุ้นเส้นก๋วยเตี๋ยวน้ำตก55g Pack
+เนสทีชาปรุงสำเร็จมิกซ์เบอร์รี่12.5gx18 Piece
+เฟรชแอนด์กรีนน้ำสลัดครีม70g Piece
+มาม่าออเรียนทัลคิตเชนคาโบนาร่าเบคอน85g Piece
+มาม่าออเรียนทัลคิตเชนคาโบนาร่าเบคอน85g Pack
+ไร่ทิพย์กระเทียมเจียว100g Piece
+ไร่ทิพย์กระเทียมเจียว100g Pack
+ไร่ทิพย์หัวหอมเจียว100g Piece
+ไร่ทิพย์หัวหอมเจียว100g Pack
+เสือร้องไห้ซอสพริกศรีราชา220g Piece
+เสือร้องไห้ซอสพริกศรีราชา220g Pack
+ฉั่วฮะเส็งน้ำมะขามเปียกเข้มข้น380g Piece
+ฉั่วฮะเส็งน้ำมะขามเปียกเข้มข้น380g Pack
+เจ้าสัวหมูหยอง18g Piece
+เจ้าสัวหมูหยอง18g Pack
+แม็กกี้ซอสปรุงรสกลมกล่อม 200ml. Piece
+แมชเนยถั่วลิสงบดชนิดหยาบ340g Piece
+แมชเนยถั่วลิสงบดชนิดละเอียด340g Piece
+ยำยำจัมโบ้ ต้มยำกุ้งข้น 63g x10 Piece
+คนอร์โจ๊กซองรสไก่32g P4 Piece
+คนอร์คัพโจ๊กซองรสหมู 32g P4 Piece
+แม่บุญล้ำน้ำปลาร้าสูตรปรุงสำเร็จ400ml Piece
+แม่บุญล้ำน้ำปลาร้าสูตรปรุงสำเร็จ400ml Pack
+เด็กสมบูรณ์ซอสปรุงรสฝาเขียว1000ml Piece
+เฟสต้าสำเร็จรูปโกลด์ฟรีซดรายซอง100g Piece
+ซุปเปอร์ซีเรียลธัญญาหารรสออริจินัล25gx20 Piece
+ยำยำคัพ รสต้มยำทะเลหม้อไฟ 60g Piece
+ยำยำคัพ รสต้มยำทะเลหม้อไฟ 60g Pack
+กระต่ายเส้นหมี่ซั่วเหลืองสูตรขมิ้น200g Piece
+เนสไลน์ข้าวโอ๊ตอัดแท่งรสดั้งเดิม80g Piece
+เนสไลน์ข้าวโอ๊ตอัดแท่งรสดั้งเดิม80g Pack
+เนสไลน์ข้าวโอ๊ตอัดแท่งรสดั้งเดิม80ก. Pack
+เนสไลน์ข้าวโอ๊ตอัดแท่งรสชอคโกแลต80g Piece
+เนสไลน์ข้าวโอ๊ตอัดแท่งรสชอคโกแลต80g Pack
+เนสไลน์ข้าวโอ๊ตอัดแท่งรสช็อคโกแลต80ก Pack
+ดรีมมี่ครีมเทียมมิลค์กี้500g Piece
+ชินซูอิชิซุปเต้าเจี้ยวผสมต้นหอม75.4g Piece
+แม่แอ๊วน้ำพริกกากหมูรสต้มยำ 40g Piece
+แม่แอ๊วน้ำพริกกากหมูรสเผ็ดน้อย 40g Piece
+แม่แอ๊วน้ำพริกกากหมูรสหม่าล่า 40g Piece
+ยำยำสูตรเด็ดสไปซี่ล็อบสเตอร์75gX5 Piece
+ยกซดน้ำซุปแจ่วฮ้อน+น้ำจิ้ม130g Piece
+บัดดี้ดีนโกลด์สำเร็จรูปอาราบิก้าซอง100g Piece
+มาม่าออเรียนทัล รสหม่าล่าเนื้อ 85g Piece
+มาม่าออเรียนทัล รสหม่าล่าเนื้อ 85g Pack
+จะโหรม พริกแกงส้มพริกสด 50g Piece
+จะโหรม พริกแกงส้มพริกสด 50g Pack
+สุขุม สลัดครีม 220g Piece
+สุขุม สลัดครีม 220g Pack
+อัมพวา กะทิแท้100%500ml Piece
+เนสกาแฟสำเร็จรูปเรดคัพกล่อง360g Piece
+เนสกาแฟเรดคัพแบล็คโรสซอง150g Piece
+รสดีซุปก้อนรสซุปกระดูกหมู80g Piece
+รสดีซุปก้อนรสซุปกระดูกหมู80g Pack
+รสดีน้ำซุปก๋วยเตี๋ยวเข้มข้น 165g. Piece
+รสดีน้ำซุปก๋วยเตี๋ยวเข้มข้น 165g. Pack
+OTOPเพียวเกรนน้ำผึ้งดอกไม้ป่า625g Piece
+แม่เหรียญน้ำปลาร้าปรุงสำเร็จ380ml Piece
+แม่เหรียญน้ำปลาร้าปรุงสำเร็จ380ml Pack
+แม่เหรียญน้ำกระเทียมดองปรุงสำเร็จ700ml Piece
+แม่เหรียญน้ำกระเทียมดองปรุงสำเร็จ700ml Pack
+ราชารสซอสหอยนางรม 1000g Piece
+หมูดีหมูหยองกรอบ22ก. Piece
+อายิโนะโมะโต๊ะผงชูรสเอ็มเอสจี150g Piece
+อายิโนะโมะโต๊ะผงชูรสเอ็มเอสจี150g Pack
+มอคโคน่าทรีโอปรุงสำเร็จน้ำตาลน้อย12gx27 Pack
+โกปิโก้ปรุงสำเร็จมัคคิอาโต20gx20 Piece
+ไมโลช็อกมอลต์ปรุงสำเร็จแอคทีฟโก23gx17 Pack
+เฟสต้าสำเร็จรูปโกลด์ฟรีซดรายขวด180g Piece
+บัดดี้ดีนโกลด์สำเร็จรูปบราซิลซอง100g Piece
+เกรนเน่ย์กราโนล่ารสชอคโกบานาน่า40g Piece
+เกรนเน่ย์กราโนล่ารสชอคโกบานาน่า40g Pack
+เกรนเน่ย์กราโนล่ารสซัมเมอร์เบอร์รี่40g Piece
+เกรนเน่ย์กราโนล่ารสซัมเมอร์เบอร์รี่40g Pack
+บัดดี้ดีนโกลด์สำเร็จรูปฟรีซดรายซอง100g Piece
+พร้าวหอมกะทิสูตรไขมันน้อยกว่า1000ml Piece
+ทรอฟโก้เงาะในน้ำเชื่อมคัดพิเศษ565g Piece
+กะปิตราชิมดีเกาะช้าง 125g Piece
+กะปิตราชิมดีเกาะช้าง 125g Pack
+OTOPชฎาภาพริกเกลือแซ่บจี๊ดสะใจ50g Piece
+OTOPชฎาภาพริกเกลือแซ่บจี๊ดสะใจ50g Pack
+ราชารส น้ำปลา ราชารส 700g Piece
+ทรอฟโก้ลูกตาลในน้ำเชื่อม565g Piece
+ฟ้าไทยน้ำซุปชาบูน้ำดำเข้มข้น200ml Piece
+ฟ้าไทยน้ำซุปชาบูน้ำดำเข้มข้น200ml Pack
+มาม่าบิ๊กแพ็ค หมูสับ 95g x4 Piece
+มาม่าบิ๊กแพ็ค หมูสับ 95g x4 Pack
+ฟ้าไทยน้ำซุปรสหมู25ml Piece
+ฟ้าไทยน้ำซุปรสหมู25ml Pack
+ยำยำคัพ รสก๋วยเตี๋ยวเรือหมูทรงเครื่อง60g Piece
+ยำยำคัพ รสก๋วยเตี๋ยวเรือหมูทรงเครื่อง60g Pack
+โลโบ ผงหมักไก่สไปซี่บิ๊กวิงก์ 20g. Piece
+โลโบ ผงหมักไก่สไปซี่บิ๊กวิงก์ 20g. Pack
+โลโบ พะโล้สูตรโบราณกึ่งสำเร็จรูป 32g. Piece
+โลโบ พะโล้สูตรโบราณกึ่งสำเร็จรูป 32g. Pack
+รสดีเมนูพะโล้ สูตรเข้มข้น 80g Piece
+รสดีเมนูพะโล้ สูตรเข้มข้น 80g Pack
+เพียวฟู้ดส์ น้ำซุปหม่าล่า 150g Piece
+เพียวฟู้ดส์น้ำซุปสุกี้ชาบูสูตร2 200ml Piece
+ฟ้าไทยผงซุปน้ำใส400g Piece
+ฟ้าไทยผงซุปน้ำใส400g Pack
+สุธารสพริกบดหยาบ100g Piece
+สุธารสพริกบดหยาบ100g Pack
+อายิโนะโมะโต๊ะผงชูรส250g Piece
+อายิโนะโมะโต๊ะผงชูรส250g Pack
+อายิโนะโมะโต๊ะผงชูรส500g Piece
+อายิโนะโมะโต๊ะผงชูรส500g Pack
+อายิโนะโมะโต๊ะผงชูรส1kg Piece
+เอ็มเคน้ำจิ้มสุกี้สูตรต้นตำรับ 350g Piece
+หมีปรุงซอสกะเพราสำเร็จรูปสูตรพริกแห้ง60g Piece
+หมีปรุงซอสกะเพราสำเร็จรูปสูตรพริกแห้ง60g Pack
+ฉั่วฮะเส็งน้ำพริกเผาสูตรละเอียด114g Piece
+ฉั่วฮะเส็งน้ำพริกเผาสูตรละเอียด114g Pack
+ชีสโตะจัง ชีสซี่ดิปรสชีส 90g Piece
+ชีสโตะจังชีสซี่ดิปรสแฮมชีส 90g Piece
+โอวัลติน3in1 30gx33 Pack
+โอวัลติน 3in1 30gx15 Pack
+โอวัลติน3in1 30gx12 Pack
+โอวัลติน3in1 30gx5 Pack
+ฉั่วฮะเส็งน้ำพริกเผา450g Piece
+เอ็มไพร์แยมมาร์มาเลดส้ม120g Piece
+เอ็มไพร์แยมมาร์มาเลดส้ม120g Pack
+เอ็มไพร์แยมสตรอ120g Piece
+เอ็มไพร์แยมสตรอ120g Pack
+โตไกวาซาบิสำเร็จรูป50g Piece
+โตไกวาซาบิสำเร็จรูป50g Pack
+นกเหยี่ยวครีมเทียมข้นหวานพร่องไขมัน2kg Piece
+ปุ้มปุ้ยหอยลายซอสรสเผ็ดสไตล์เกาหลี40g Piece
+ปุ้มปุ้ยหอยลายซอสรสเผ็ดสไตล์เกาหลี40g Pack
+บัดดี้ดีนสำเร็จรูปเอ็กซ์ตร้าเบลนด์80g Piece
+อังเคิลบาร์นส์สปาเก็ตตี้500g Piece
+อังเคิลบาร์นส์มักกะโรนีข้องอ500g Piece
+ฟ้าไทยน้ำซุปหม่าล่า150ml Piece
+ฟ้าไทยน้ำซุปหม่าล่า150ml Pack
+เฟอร์เชย์เฮเซลนัทบดผสมโกโก้200g Piece
+ซันฟอเรสท์น้ำผึ้ง130g Piece
+ซันฟอเรสท์น้ำผึ้ง130g Pack
+มาม่าคัพรสหม่าล่า60g Piece
+มาม่าคัพรสหม่าล่า60g Pack
+โอเคผงมะนาว70g Piece
+โอเคผงมะนาว70g Pack
+มังกรบินชาเขียวมัทฉะ100g Piece
+มาม่าออเรียนทัลคิตเชนรสทงคตสึ85g Piece
+มาม่าออเรียนทัลคิตเชนรสทงคตสึ85g Pack
+คนอร์คัพมันบดรสชีส26g Piece
+คนอร์คัพมันบดรสชีส26g Pack
+DSBซอสปรุงรสฝาเขียว630ml Piece
+เนสกาแฟสำเร็จรูปเรดคัพขวด200g Piece
+มาดามป้อมน้ำพริกนรกแมงดา15g Piece
+มาดามป้อมน้ำพริกนรกแมงดา15g Pack
+มาดามป้อมน้ำพริกนรกปลาย่าง15g Piece
+มาดามป้อมน้ำพริกนรกปลาย่าง15g Piece
+มาดามป้อมน้ำพริกนรกปลาย่าง15g Pack
+แคทเธอรีนชาเขียว12gx10 Piece
+แคทเธอรีนชาเขียว12gx10 Pack
+บิวติสรินปรุงสำเร็จผสมมะระขี้นก12gx5 Piece
+บิวติสรินปรุงสำเร็จผสมมะระขี้นก12gx5 Pack
+ฉั่วฮะเส็งน้ำพริกเผาทรงเครื่อง20g Piece
+ฉั่วฮะเส็งน้ำพริกเผาทรงเครื่อง20g Pack
+ฉั่วฮะเส็งน้ำพริกเผาถ้วยสูตรเผ็ด20g. Piece
+ฉั่วฮะเส็งน้ำพริกเผาถ้วยสูตรเผ็ด20g. Pack
+มอคโคน่าฟรีซดรายรอยัลโกลด์ดาร์กโรสต์30g Piece
+มอคโคน่าฟรีซดรายรอยัลโกลด์ดาร์กโรสต์30g Pack
+คิทแคทเครื่องดื่ม3in1รสช็อกโกแลต32gx10 Piece
+นกเหยี่ยวครีมเทียมข้นหวานพร่องไขมัน545g Piece
+คุณนิดน้ำจิ้มสุกี้ย่างเกาหลีจัดจ้าน500g Piece
+คุณนิดน้ำจิ้มสุกี้ย่างเกาหลีจัดจ้าน500g Pack
+คุณนิดน้ำจิ้มสุกี้ย่างเกาหลีดั้งเดิม500g Piece
+คุณนิดน้ำจิ้มสุกี้ย่างเกาหลีดั้งเดิม500g Pack
+เนสกาแฟโรบัสต้า13gx30 Piece
+ล่ำซำน้ำปลาร้าสูตรยำ55g Piece
+ล่ำซำน้ำปลาร้าสูตรยำ55g Pack`;
+
+        const PRODUCTS = RAW_PRODUCTS.split('\n').map(p => p.trim()).filter(p => p !== '');
+        const STORES = ['BigC', 'Lotus', 'Tops', 'AllOnline'];
+        
+        let priceDatabase = {};
+        let currentProduct = null;
+        let isScraping = false;
+        let chartInstance = null;
+
+        // --- Bot Logic: Variable Pack Sizes ---
+        
+        function parseProduct(name) {
+            const isPack = name.toLowerCase().includes('pack') || name.toLowerCase().includes('sack') || name.toLowerCase().includes('set');
+            const isPiece = !isPack;
+            
+            // หาจำนวนเริ่มต้นจากชื่อสินค้า (เช่น x12, x27)
+            const qtyMatch = name.match(/x(\d+)/i);
+            const defaultQty = qtyMatch ? parseInt(qtyMatch[1]) : (isPack ? 6 : 1);
+            
+            return { isPack, isPiece, defaultQty, fullName: name };
+        }
+
+        // ฟังค์ชั่นจำลองว่าร้านไหนขายแพ็คเท่าไหร่
+        function getStoreInventoryDetails(productName, store) {
+            const product = parseProduct(productName);
+            if (product.isPiece) return { qty: 1, unitLabel: 'ชิ้น' };
+
+            let qty = product.defaultQty;
+            
+            // โจ๊กคนอร์ซอง
+            if (productName.includes("คนอร์โจ๊กซอง")) {
+                if (store === 'BigC') qty = 6;
+                if (store === 'Lotus') qty = 4;
+                if (store === 'Tops') qty = 3;
+                if (store === 'AllOnline') qty = 2; // AllOnline/7-11 มักขายแพ็คขนาดเล็ก
+            } else if (productName.includes("มาม่า") || productName.includes("ยำยำ")) {
+                if (store === 'BigC') qty = 10;
+                if (store === 'Lotus') qty = 6;
+                if (store === 'Tops') qty = 5;
+                if (store === 'AllOnline') qty = 3;
+            } else if (productName.includes("เนสกาแฟ") || productName.includes("เบอร์ดี้")) {
+                if (store === 'BigC') qty = 40;
+                if (store === 'Lotus') qty = 27;
+                if (store === 'Tops') qty = 9;
+                if (store === 'AllOnline') qty = 5;
+            } else {
+                if (store === 'BigC') qty = product.defaultQty;
+                if (store === 'Lotus') qty = Math.max(1, Math.floor(product.defaultQty * 0.75));
+                if (store === 'Tops') qty = Math.max(1, Math.floor(product.defaultQty * 0.5));
+                if (store === 'AllOnline') qty = Math.max(1, Math.floor(product.defaultQty * 0.3));
+            }
+
+            return { qty, unitLabel: `แพ็ค x${qty}` };
+        }
+
+        function getBaseUnitPrice(productName) {
+            const name = productName;
+            if (name.includes("เนสวิต้า")) return 99 / 12;
+            if (name.includes("คนอร์โจ๊กซอง")) return 14.5;
+            if (name.includes("คนอร์คัพโจ๊ก")) return 18.0;
+            if (name.includes("มาม่า") || name.includes("ยำยำ")) return 6.0;
+            if (name.includes("เนสกาแฟ") || name.includes("เบอร์ดี้")) return 4.5;
+            if (name.includes("ซอส") || name.includes("น้ำปลา")) return 35.0;
+            return 25.0;
+        }
+
+        function getStoreCalculatedPrice(productName, store) {
+            const baseUnit = getBaseUnitPrice(productName);
+            const inv = getStoreInventoryDetails(productName, store);
+            
+            let price = baseUnit * inv.qty;
+            
+            // ปรับราคาตามนโยบายร้านค้า
+            if (store === 'BigC') price *= 0.94; // เน้นขายส่งถูกสุด
+            if (store === 'Tops') price *= 1.05; // เน้นของพรีเมียม
+            if (store === 'AllOnline') price *= 1.02; // ราคามาตรฐาน 7-11
+            
+            return {
+                totalPrice: parseFloat(price.toFixed(2)),
+                qty: inv.qty,
+                unitLabel: inv.unitLabel,
+                unitPrice: parseFloat((price / inv.qty).toFixed(2))
+            };
+        }
+
+        function generateHistory(productName) {
+            const history = [];
+            const today = new Date();
+
+            for (let i = 14; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                
+                const record = { date: dateStr, stores: {} };
+                STORES.forEach(store => {
+                    const data = getStoreCalculatedPrice(productName, store);
+                    const fluctuation = 1 + ((Math.random() - 0.5) * 0.03);
+                    record.stores[store] = {
+                        ...data,
+                        totalPrice: parseFloat((data.totalPrice * fluctuation).toFixed(2)),
+                        unitPrice: parseFloat(((data.totalPrice * fluctuation) / data.qty).toFixed(2))
+                    };
+                });
+                history.push(record);
+            }
+            return history;
+        }
+
+        // --- UI Logic ---
+
+        function init() {
+            lucide.createIcons();
+            document.getElementById('productCount').innerText = `${PRODUCTS.length} รายการ`;
+            document.getElementById('lastUpdatedText').innerText = new Date().toLocaleString('th-TH');
+            
+            PRODUCTS.forEach(p => {
+                priceDatabase[p] = generateHistory(p);
+            });
+
+            renderList(PRODUCTS);
+        }
+
+        function renderList(list) {
+            const container = document.getElementById('productListContainer');
+            container.innerHTML = '';
+            
+            list.forEach(p => {
+                const btn = document.createElement('button');
+                btn.className = `w-full text-left px-4 py-3 rounded-lg transition-all border border-transparent mb-1 hover:bg-slate-50 truncate ${p === currentProduct ? 'active-product shadow-sm' : 'text-slate-600'}`;
+                btn.innerText = p;
+                btn.onclick = () => selectProduct(p);
+                container.appendChild(btn);
+            });
+        }
+
+        function selectProduct(p) {
+            currentProduct = p;
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            
+            const buttons = document.querySelectorAll('#productListContainer button');
+            buttons.forEach(b => {
+                if(b.innerText === p) b.classList.add('active-product', 'shadow-sm');
+                else b.classList.remove('active-product', 'shadow-sm');
+            });
+
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            if(!currentProduct) return;
+
+            const history = priceDatabase[currentProduct];
+            const current = history[history.length - 1];
+            const previous = history[history.length - 2];
+
+            document.getElementById('selectedProductName').innerText = currentProduct;
+
+            const container = document.getElementById('statsContainer');
+            container.innerHTML = '';
+
+            STORES.forEach((store, idx) => {
+                const storeData = current.stores[store];
+                const prevStoreData = previous.stores[store];
+                
+                const diff = storeData.totalPrice - prevStoreData.totalPrice;
+                const pct = (diff / prevStoreData.totalPrice) * 100;
+                
+                const isUp = diff > 0;
+                const isDown = diff < 0;
+                
+                // Store-specific styles
+                let theme = 'border-slate-100';
+                let iconColor = 'text-slate-300';
+                if (store === 'BigC') { theme = 'border-red-100'; iconColor = 'text-red-100'; }
+                if (store === 'Lotus') { theme = 'border-emerald-100'; iconColor = 'text-emerald-100'; }
+                if (store === 'Tops') { theme = 'border-blue-100'; iconColor = 'text-blue-100'; }
+                if (store === 'AllOnline') { theme = 'border-orange-100'; iconColor = 'text-orange-100'; }
+
+                const textCol = isUp ? 'text-rose-500' : (isDown ? 'text-emerald-600' : 'text-slate-400');
+                const trendIcon = isUp ? 'trending-up' : (isDown ? 'trending-down' : 'minus');
+
+                container.innerHTML += `
+                    <div class="bg-white rounded-xl p-5 border-2 ${theme} relative transition-all hover:shadow-lg group">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex flex-col">
+                                <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">${store}</span>
+                                <span class="text-[10px] font-bold text-slate-500">${storeData.unitLabel}</span>
+                            </div>
+                            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center ${iconColor}">
+                                <i data-lucide="store" class="w-4 h-4"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-2xl font-black text-slate-800">฿${storeData.totalPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                        
+                        <div class="flex items-center gap-1.5 mt-1 font-bold ${textCol} text-[10px]">
+                            <i data-lucide="${trendIcon}" class="w-3 h-3"></i>
+                            <span>${Math.abs(diff).toFixed(2)} (${Math.abs(pct).toFixed(1)}%)</span>
+                        </div>
+                        
+                        <div class="mt-5 pt-4 border-t border-slate-50 space-y-2">
+                            <div class="flex justify-between items-center text-[10px]">
+                                <span class="text-slate-400">ราคา/ชิ้น:</span>
+                                <span class="text-slate-700 font-black">฿${storeData.unitPrice.toFixed(2)}</span>
+                            </div>
+                            <div class="w-full bg-slate-50 h-1 rounded-full overflow-hidden">
+                                <div class="h-full ${store === 'BigC' ? 'bg-red-400' : (store === 'Lotus' ? 'bg-emerald-400' : (store === 'Tops' ? 'bg-blue-400' : 'bg-orange-400'))}" style="width: ${Math.min(100, (storeData.unitPrice/50)*100)}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            lucide.createIcons();
+            renderChart(history);
+        }
+
+        function renderChart(history) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            if(chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: history.map(h => h.date.split('-').slice(1).join('/')),
+                    datasets: STORES.map((store, i) => ({
+                        label: store,
+                        data: history.map(h => h.stores[store].unitPrice),
+                        borderColor: ['#ef4444', '#10b981', '#3b82f6', '#f97316'][i],
+                        backgroundColor: 'transparent',
+                        borderWidth: 4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        tension: 0.3
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            padding: 12,
+                            backgroundColor: 'rgba(255,255,255,0.95)',
+                            titleColor: '#1e293b',
+                            bodyColor: '#475569',
+                            borderColor: '#e2e8f0',
+                            borderWidth: 1,
+                            bodyFont: { family: 'Sarabun' }
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            grid: { color: '#f1f5f9' },
+                            ticks: { 
+                                font: { size: 10 },
+                                callback: val => '฿' + val
+                            }
+                        },
+                        x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        document.getElementById('runBotBtn').onclick = () => {
+            if(isScraping) return;
+            isScraping = true;
+
+            const btn = document.getElementById('runBotBtn');
+            const btnText = document.getElementById('botBtnText');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const botIcon = document.getElementById('botIcon');
+
+            progressContainer.classList.remove('hidden');
+            btn.classList.add('bg-slate-400', 'cursor-not-allowed');
+            botIcon.classList.add('animate-spin');
+
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 12;
+                if(progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    PRODUCTS.forEach(p => {
+                        const history = priceDatabase[p];
+                        const last = history[history.length - 1];
+                        
+                        const next = { date: todayStr, stores: {} };
+                        STORES.forEach(s => {
+                            const lastStore = last.stores[s];
+                            const fluctuation = 1 + ((Math.random() - 0.5) * 0.04);
+                            next.stores[s] = {
+                                ...lastStore,
+                                totalPrice: parseFloat((lastStore.totalPrice * fluctuation).toFixed(2)),
+                                unitPrice: parseFloat(((lastStore.totalPrice * fluctuation) / lastStore.qty).toFixed(2))
+                            };
+                        });
+                        history.push(next);
+                        history.shift();
+                    });
+
+                    setTimeout(() => {
+                        isScraping = false;
+                        progressContainer.classList.add('hidden');
+                        btn.classList.remove('bg-slate-400', 'cursor-not-allowed');
+                        botIcon.classList.remove('animate-spin');
+                        btnText.innerText = 'รันบอทสแกนทุกเว็บ';
+                        document.getElementById('lastUpdatedText').innerText = new Date().toLocaleString('th-TH');
+                        updateDisplay();
+                    }, 600);
+                }
+                progressBar.style.width = `${progress}%`;
+                btnText.innerText = `บอทกำลังเข้าสำรวจราคาจาก AllOnline และเจ้าอื่นๆ... ${Math.floor(progress)}%`;
+            }, 100);
+        };
+
+        document.getElementById('searchInput').oninput = (e) => {
+            const term = e.target.value.toLowerCase();
+            const filtered = PRODUCTS.filter(p => p.toLowerCase().includes(term));
+            renderList(filtered);
+        };
+
+        window.onload = init;
+    </script>
+</body>
+</html>
